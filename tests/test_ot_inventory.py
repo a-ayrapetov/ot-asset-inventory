@@ -187,7 +187,7 @@ def test_endpoint_rows_and_flags():
     r = rows_by_mac(inv)
     assert set(r) == {"00:00:5e:00:53:01", "00:00:5e:00:53:02", "00:00:5e:00:53:31", "00:00:5e:00:53:32",
                       "00:00:5e:00:53:33", "00:00:5e:00:53:41", "02:00:ab:00:00:06", "00:00:5e:00:53:51",
-                      "02:00:00:00:00:52"}
+                      "02:00:00:00:00:52", "00:00:5e:00:53:54", "00:00:5e:00:53:55"}
     assert r["00:00:5e:00:53:01"] == {"switch": "access-sw1", "port": "GigabitEthernet1/0/1",
                                       "port_description": "PLC LINE 3 CAB A", "vlan": "10",
                                       "mac": "00:00:5e:00:53:01", "ip": "192.0.2.11",
@@ -206,20 +206,64 @@ def test_ip_comes_from_separate_l3_arp_folder():
     assert inv["arp"] == {"entries": 9, "files": 2}
 
 
-def test_trunks_and_infra_neighbours_are_excluded():
+def test_trunks_are_excluded_and_bridge_ports_kept():
     inv = ot.inventory(COLLECT)
     ports = {(r["switch"], r["port"]) for r in inv["endpoints"]}
     infra = {(r["switch"], r["port"]): r["reason"] for r in inv["infrastructure"]}
     assert infra == {("access-sw1", "TenGigabitEthernet1/1/1"): "trunk;cdp", ("nx-sw2", "Ethernet1/4"): "lldp",
                      ("nx-sw2", "Ethernet1/49"): "trunk;lldp", ("nx-sw2", "Port-channel10"): "trunk"}
-    assert not ports & set(infra)
-    assert "00:00:5e:00:53:f1" not in rows_by_mac(inv)
+    assert ports & set(infra) == {("nx-sw2", "Ethernet1/4")}  # access port behind a bridge
+    assert "00:00:5e:00:53:f1" not in rows_by_mac(inv)  # learned on trunks only
+    assert "00:00:5e:00:53:70" not in rows_by_mac(inv)  # learned on a port-channel
+
+
+def test_devices_behind_a_bridge_stay_in_the_list():
+    r = rows_by_mac(ot.inventory(COLLECT, ot.load_oui(OUI)))
+    for mac in ("00:00:5e:00:53:54", "00:00:5e:00:53:55"):
+        assert (r[mac]["switch"], r[mac]["port"], r[mac]["vlan"]) == ("nx-sw2", "Ethernet1/4", "40")
+        assert r[mac]["port_description"] == "Cell 9 ring sw"
+        assert r[mac]["flags"] == "behind-bridge;no-ip"  # no multi-mac: the bridge is already known
+
+
+def test_bridge_neighbour_on_port_of_unknown_mode_stays_out(tmp_path):
+    sw = tmp_path / "nx-sw2"
+    sw.mkdir()
+    for f in ("show_mac_address-table.txt", "show_lldp_neighbors_detail.txt"):
+        shutil.copy(COLLECT / "nx-sw2" / f, sw / f)
+    inv = ot.inventory(tmp_path)
+    ports = {r["port"] for r in inv["endpoints"]}
+    assert ports == {"Ethernet1/1", "Ethernet1/2"}  # without status an uplink cannot be told from an access port
+    assert {r["port"] for r in inv["infrastructure"]} == {"Ethernet1/4", "Ethernet1/49", "Port-channel10"}
+
+
+def test_several_mac_captures_are_read_as_a_union(tmp_path):
+    sw = tmp_path / "access-sw1"
+    shutil.copytree(COLLECT / "access-sw1", sw)
+    (sw / "show_mac_address-table_0900.txt").write_text(
+        "Vlan    Mac Address       Type        Ports\n"
+        "  10    0000.5e00.5305    DYNAMIC     Gi1/0/5\n"
+        "  10    0000.5e00.5301    DYNAMIC     Gi1/0/1\n")
+    r = rows_by_mac(ot.inventory(tmp_path))
+    assert r["00:00:5e:00:53:05"]["port"] == "GigabitEthernet1/0/5"  # only in the second capture
+    assert "00:00:5e:00:53:31" in r  # only in the first capture
+    assert sum(1 for x in r.values() if x["mac"] == "00:00:5e:00:53:01") == 1  # seen twice, listed once
 
 
 def test_vendor_without_oui_file():
     inv = ot.inventory(COLLECT)
     assert {r["vendor"] for r in inv["endpoints"]} == {ot.NO_OUI}
     assert not any("unknown-vendor" in r["flags"] for r in inv["endpoints"])
+
+
+def test_joined_oui_file_longest_prefix_wins(tmp_path):
+    mac = "00:00:5e:00:53:01"
+    ma_m, ma_s = "MA-M,00005E0,Sample Sensors Ltd,x\n", "MA-S,00005E005,Sample Valves Co,x\n"
+    joined = tmp_path / "joined.csv"
+    joined.write_text(OUI.read_text() + ma_m)
+    assert ot.vendor_of(mac, ot.load_oui(joined)) == "Sample Sensors Ltd"  # MA-M beats MA-L
+    joined.write_text(OUI.read_text() + ma_m + ma_s)
+    assert ot.vendor_of(mac, ot.load_oui(joined)) == "Sample Valves Co"  # MA-S beats MA-M
+    assert ot.vendor_of(mac, ot.load_oui(OUI)) == "Example Automation Ltd"
 
 
 def test_multi_mac_threshold():
@@ -253,8 +297,12 @@ def test_port_channel_is_uplink_when_status_is_missing(tmp_path):
 
 
 def test_summary_totals():
-    text = ot.summary(ot.inventory(COLLECT))
-    assert "TOTAL           7          9            4" in text
+    text = ot.summary(ot.inventory(COLLECT, ot.load_oui(OUI)))
+    table = text.split("\n\n")[0].splitlines()
+    assert table[0].split()[:4] == ["switch", "macs", "ports", "endpoints"]
+    rows = {l.split()[0]: l.split()[1:5] for l in table[1:]}
+    assert rows == {"access-sw1": ["8", "5", "7", "1"], "nx-sw2": ["6", "3", "4", "3"], "TOTAL": ["14", "8", "11", "4"]}
+    assert "Flags: multi-mac 3, behind-bridge 2, no-ip 5, unknown-vendor 1, locally-administered 2" in text
     assert "Port-channel10" in text
 
 
@@ -287,9 +335,10 @@ def test_cli_collect_outputs_and_exit_codes(tmp_path, capsys):
     with open(out_csv, newline="") as fh:
         r = csv.DictReader(fh)
         assert r.fieldnames == ot.FIELDS
-        assert len(list(r)) == 9
+        assert len(list(r)) == 11
     data = json.loads(out_json.read_text())
-    assert len(data["endpoints"]) == 9 and len(data["infrastructure"]) == 4
+    assert len(data["endpoints"]) == 11 and len(data["infrastructure"]) == 4
+    assert data["switches"][1]["macs"] == 6
     assert "access-sw1" in capsys.readouterr().out
 
     assert ot.main([str(tmp_path / "nope")]) == 2

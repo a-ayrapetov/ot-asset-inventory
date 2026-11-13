@@ -18,18 +18,18 @@ ot-inventory collect/ --oui oui.csv --csv inventory.csv --multi-mac-threshold 3
 ot-inventory diff inventory-old.csv inventory.csv --csv changes.csv
 ```
 
-You can also run `python ot_inventory.py` straight from a clone. Example against the included fixtures:
+You can also run `python ot_inventory.py` straight from a clone. Example against the included fixtures (`python ot_inventory.py tests/fixtures/collect --oui tests/fixtures/oui.csv`):
 
 ```
-switch      ports  endpoints  infra links  missing files
-access-sw1      5          7            1  lldp
-nx-sw2          2          2            3  cdp
-TOTAL           7          9            4
+switch       macs  ports  endpoints  infra links  missing files
+access-sw1      8      5          7            1  lldp
+nx-sw2          6      3          4            3  cdp
+TOTAL          14      8         11            4
 
 ARP: 9 IP to MAC entries from 2 file(s).
-Flags: multi-mac 3, no-ip 3, unknown-vendor 1, locally-administered 2
+Flags: multi-mac 3, behind-bridge 2, no-ip 5, unknown-vendor 1, locally-administered 2
 
-Infrastructure links (not in the endpoint list):
+Infrastructure links (trunk, routed and port-channel MACs are left out of the endpoint list):
   access-sw1  TenGigabitEthernet1/1/1      trunk;cdp    core-sw1 TwentyFiveGigE1/0/11 198.51.100.1
   nx-sw2      Ethernet1/4                  lldp         cell9-sw port 2 192.0.2.54
   nx-sw2      Ethernet1/49                 trunk;lldp   core-sw1 TwentyFiveGigE1/0/12 198.51.100.1
@@ -72,16 +72,19 @@ The parser was written against common IOS-XE and NX-OS output of `show ip arp`, 
 
 | Flag | Meaning |
 |---|---|
-| `multi-mac` | access port with 2 or more MACs (tune with `--multi-mac-threshold`): a hidden unmanaged switch, a hub, or a device with a built-in switch such as a phone or a ring-capable PLC |
+| `multi-mac` | access port with 2 or more MACs (tune with `--multi-mac-threshold`) and no known bridge on it: a hidden unmanaged switch, a hub, or a device with a built-in switch such as a phone or a ring-capable PLC |
+| `behind-bridge` | access port whose CDP or LLDP neighbour is a router, switch, bridge or access point: the device is that neighbour or sits behind it, such as a PLC with a built-in switch or a station in a ring. The port is also listed as an infrastructure link |
 | `no-ip` | MAC with no ARP entry: a layer 2 only device, or its ARP table lives on a router you did not collect |
 | `unknown-vendor` | `--oui` was given but the MAC prefix is not in it |
 | `locally-administered` | second-lowest bit of the first octet is set: a randomized or virtual MAC, so the vendor lookup tells you nothing |
 
-Trunk ports, port-channels when no status file says otherwise, and ports whose CDP or LLDP neighbour advertises router, switch, bridge, access point or repeater capability are kept out of the endpoint list and reported as infrastructure links. Phones stay in the endpoint list. An OT device with a built-in switch that advertises Bridge in LLDP will land on the infrastructure list, so read that list too. Multicast, broadcast, CPU and router MACs are skipped.
+Trunk ports, routed ports and port-channels are reported as infrastructure links and their MACs are kept out of the endpoint list, because those MACs belong to devices on other switches. A port whose CDP or LLDP neighbour advertises router, switch, bridge, access point or repeater capability is reported as an infrastructure link as well. When `show interfaces status` shows that port as an access port, its MACs also stay in the endpoint list flagged `behind-bridge`, so a PLC with a built-in switch or a new device in a ring is never hidden. Without the status file the tool cannot tell such a port from an uplink, so it keeps the MACs out. Phones are plain endpoints. Multicast, broadcast, CPU and router MACs are skipped.
+
+In the summary, `macs` counts every unicast MAC the switch learned, uplinks included, and `endpoints` counts the MACs that made it into the endpoint list. A large gap on an access switch usually means a trunk with a lot of traffic behind it, which is expected.
 
 The JSON file holds `endpoints` (the CSV rows), `infrastructure` (switch, port, reason, neighbour name, port, platform and IP, MAC count) and a per switch `switches` summary.
 
-For the vendor column, download the MA-L registry CSV from the IEEE (`https://standards-oui.ieee.org/oui/oui.csv`, columns `Registry,Assignment,Organization Name,Organization Address`) and pass it with `--oui`. No OUI data is bundled. MA-M and MA-S registry files work too, and the longest matching prefix wins.
+For the vendor column, download the MA-L registry CSV from the IEEE (`https://standards-oui.ieee.org/oui/oui.csv`, columns `Registry,Assignment,Organization Name,Organization Address`) and pass it with `--oui`. No OUI data is bundled. MA-M and MA-S registry CSVs have the same columns; join them with the MA-L file into one CSV (one header) and the longest matching prefix wins.
 
 ## Collecting the input safely
 
@@ -104,6 +107,7 @@ show lldp neighbors detail
 - Poll no more often than every 15 minutes. Hourly is a sensible default.
 - Start with two known-good switches and check the result against what is physically on those ports before you widen the run.
 - Keep every raw output next to the parsed result, so any row can be traced back to the line it came from.
+- To keep quiet devices, save several MAC table captures in one switch folder; files of one kind are read together, so the inventory is their union. A device that moved between captures shows on both ports.
 - On IOS-XE the ARP table is per VRF. Collect `show ip arp vrf <name>` for each VRF that carries OT traffic, or those devices show up as `no-ip`.
 
 ## Why this exists

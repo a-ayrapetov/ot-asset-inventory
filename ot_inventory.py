@@ -11,8 +11,10 @@ It correlates four tables per switch:
   show interfaces status port to VLAN, status and description
   CDP / LLDP detail      port to neighbour identity
 
-Trunks and ports with an infrastructure neighbour (router, switch, bridge, access
-point) are kept out of the endpoint list and reported as infrastructure links.
+Trunks, routed ports and port-channels are kept out of the endpoint list and
+reported as infrastructure links. An access port whose neighbour is a router,
+switch, bridge or access point is reported as an infrastructure link too, and its
+MACs stay in the endpoint list flagged behind-bridge.
 
 Nothing is sent to the OT endpoints. Text parsing only, standard library only,
 never connects to anything.
@@ -280,7 +282,8 @@ def vendor_of(mac: str, oui: dict) -> str:
 # ---------------------------------------------------------------- correlation
 
 def build_switch(name: str, tables: dict, arp: dict, oui=None, threshold: int = 2):
-    """tables: {kind: text}. arp: {mac: {ip}}. Returns (endpoint rows, infrastructure rows)."""
+    """tables: {kind: text}. arp: {mac: {ip}}.
+    Returns (endpoint rows, infrastructure rows, count of unicast MACs the switch learned)."""
     status = parse_interfaces_status(tables.get("status", ""))
     neigh = {}
     for n in parse_cdp(tables.get("cdp", "")) + parse_lldp(tables.get("lldp", "")):
@@ -301,18 +304,25 @@ def build_switch(name: str, tables: dict, arp: dict, oui=None, threshold: int = 
             reason.append("port-channel")
         infra_n = [n for n in neigh.get(port, []) if n.infra]
         reason += sorted({n.proto for n in infra_n})
+        bridge = False
         if reason:
             n = infra_n[0] if infra_n else Neighbor(port, "")
             infra.append({"switch": name, "port": port, "port_description": st.get("description", ""),
                           "vlan": st.get("vlan", ""), "reason": ";".join(reason), "neighbor": n.name,
                           "neighbor_port": n.remote_port, "neighbor_platform": n.platform,
                           "neighbor_ip": n.ip, "macs": len(macs)})
-            continue
+            # An access port (status says a VLAN number) with a bridge or switch behind it: keep
+            # its devices. Trunks, routed ports, port-channels and ports of unknown mode stay out.
+            bridge = mode.isdigit() and not port.startswith("Port-channel")
+            if not bridge:
+                continue
         for vlan, mac in sorted(entries, key=lambda e: (int(e[0]), e[1])):
             ips = ";".join(sorted(arp.get(mac, ()), key=ip_key))
             vendor = NO_OUI if oui is None else vendor_of(mac, oui)
             flags = []
-            if len(macs) >= threshold:
+            if bridge:
+                flags.append("behind-bridge")  # the bridge is known, so multi-mac would add nothing
+            elif len(macs) >= threshold:
                 flags.append("multi-mac")
             if not ips:
                 flags.append("no-ip")
@@ -322,7 +332,7 @@ def build_switch(name: str, tables: dict, arp: dict, oui=None, threshold: int = 
                 flags.append("locally-administered")
             endpoints.append({"switch": name, "port": port, "port_description": st.get("description", ""),
                               "vlan": vlan, "mac": mac, "ip": ips, "vendor": vendor, "flags": ";".join(flags)})
-    return endpoints, infra
+    return endpoints, infra, len({m for e in by_port.values() for _, m in e})
 
 
 def kind_of(path: Path):
@@ -369,10 +379,11 @@ def inventory(root, oui=None, threshold: int = 2) -> dict:
     result = {"endpoints": [], "infrastructure": [], "switches": [],
               "arp": {"entries": arp_entries, "files": len(arp_texts)}}
     for name, tables, missing in switches:
-        ep, inf = build_switch(name, tables, arp, oui, threshold)
+        ep, inf, mac_count = build_switch(name, tables, arp, oui, threshold)
         result["endpoints"] += ep
         result["infrastructure"] += inf
-        result["switches"].append({"switch": name, "ports_with_endpoints": len({r["port"] for r in ep}),
+        result["switches"].append({"switch": name, "macs": mac_count,
+                                   "ports_with_endpoints": len({r["port"] for r in ep}),
                                    "endpoints": len({r["mac"] for r in ep}),
                                    "infrastructure_links": len(inf), "missing": missing})
     return result
@@ -381,22 +392,22 @@ def inventory(root, oui=None, threshold: int = 2) -> dict:
 def summary(inv: dict) -> str:
     sw = inv["switches"]
     w = max([len("switch"), len("TOTAL")] + [len(s["switch"]) for s in sw])
-    lines = [f"{'switch':<{w}}  {'ports':>5}  {'endpoints':>9}  {'infra links':>11}  missing files"]
+    lines = [f"{'switch':<{w}}  {'macs':>5}  {'ports':>5}  {'endpoints':>9}  {'infra links':>11}  missing files"]
     for s in sw:
-        lines.append(f"{s['switch']:<{w}}  {s['ports_with_endpoints']:>5}  {s['endpoints']:>9}  "
+        lines.append(f"{s['switch']:<{w}}  {s['macs']:>5}  {s['ports_with_endpoints']:>5}  {s['endpoints']:>9}  "
                      f"{s['infrastructure_links']:>11}  {', '.join(s['missing']) or 'none'}")
     tot = lambda k: sum(s[k] for s in sw)
-    lines.append(f"{'TOTAL':<{w}}  {tot('ports_with_endpoints'):>5}  {tot('endpoints'):>9}  "
+    lines.append(f"{'TOTAL':<{w}}  {tot('macs'):>5}  {tot('ports_with_endpoints'):>5}  {tot('endpoints'):>9}  "
                  f"{tot('infrastructure_links'):>11}")
     lines.append(f"\nARP: {inv['arp']['entries']} IP to MAC entries from {inv['arp']['files']} file(s).")
     counts = {}
     for r in inv["endpoints"]:
         for f in filter(None, r["flags"].split(";")):
             counts[f] = counts.get(f, 0) + 1
-    order = ["multi-mac", "no-ip", "unknown-vendor", "locally-administered"]
+    order = ["multi-mac", "behind-bridge", "no-ip", "unknown-vendor", "locally-administered"]
     lines.append("Flags: " + (", ".join(f"{f} {counts[f]}" for f in order if f in counts) or "none"))
     if inv["infrastructure"]:
-        lines.append("\nInfrastructure links (not in the endpoint list):")
+        lines.append("\nInfrastructure links (trunk, routed and port-channel MACs are left out of the endpoint list):")
         for r in inv["infrastructure"]:
             peer = " ".join(x for x in (r["neighbor"], r["neighbor_port"], r["neighbor_ip"]) if x)
             lines.append(f"  {r['switch']:<{w}}  {r['port']:<28} {r['reason']:<12} {peer or '(no neighbour seen)'}")
