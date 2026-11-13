@@ -1,0 +1,12 @@
+access-sw1#show interfaces status
+
+Port         Name               Status       Vlan       Duplex  Speed Type
+Gi1/0/1      PLC LINE 3 CAB A   connected    10         a-full  a-100 10/100/1000BaseTX
+Gi1/0/2      HMI 2              connected    10         a-full a-1000 10/100/1000BaseTX
+Gi1/0/3      Cell 4 cabinet sw  connected    20         a-full  a-100 10/100/1000BaseTX
+Gi1/0/4                         connected    30         a-full a-1000 10/100/1000BaseTX
+Gi1/0/5                         notconnect   10           auto   auto 10/100/1000BaseTX
+Gi1/0/6      Drive VFD 7        connected    10         a-full  a-100 10/100/1000BaseTX
+Te1/1/1      Uplink core-sw1    connected    trunk        full    10G SFP-10GBase-SR
+Te1/1/2                         notconnect   1            full    10G unknown
+access-sw1#

@@ -1,0 +1,16 @@
+nx-sw2# show mac address-table
+Legend:
+        * - primary entry, G - Gateway MAC, (R) - Routed MAC, O - Overlay MAC
+        age - seconds since last seen,+ - primary entry using vPC Peer-Link,
+        (T) - True, (F) - False, C - ControlPlane MAC, ~ - vsan
+   VLAN     MAC Address      Type      age     Secure NTFY Ports
+---------+-----------------+--------+---------+------+----+------------------
+*   40     0000.5e00.5351   dynamic  0         F      F    Eth1/1
+*   40     0200.0000.0052   dynamic  0         F      F    Eth1/2
+*   40     0000.5e00.5354   dynamic  0         F      F    Eth1/4
+*   40     0000.5e00.5355   dynamic  0         F      F    Eth1/4
+*   40     0000.5e00.53f1   dynamic  0         F      F    Eth1/49
++   40     0000.5e00.5360   dynamic  0         F      F    vPC Peer-Link
+C   40     0000.5e00.5370   dynamic  0         F      F    Po10
+G   -      0000.5e00.53e0   static   -         F      F    sup-eth1(R)
+G  40      0000.5e00.53e0   static   -         F      F    sup-eth1(R)

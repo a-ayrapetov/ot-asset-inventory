@@ -1,0 +1,13 @@
+nx-sw2# show interface status
+
+--------------------------------------------------------------------------------
+Port          Name               Status    Vlan      Duplex  Speed   Type
+--------------------------------------------------------------------------------
+mgmt0         --                 connected routed    full    1000    --
+Eth1/1        Camera yard 1      connected 40        full    1000    10/100/1000BaseT
+Eth1/2        --                 connected 40        full    100     10/100/1000BaseT
+Eth1/3        --                 notconnec 40        auto    auto    10/100/1000BaseT
+Eth1/4        Cell 9 ring sw     connected 40        full    1000    10/100/1000BaseT
+Eth1/49       to core-sw1        connected trunk     full    10G     10Gbase-SR
+Po10          vpc peer-link      connected trunk     full    40G     --
+

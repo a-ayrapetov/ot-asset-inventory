@@ -1,0 +1,39 @@
+access-sw1#show cdp neighbors detail
+-------------------------
+Device ID: core-sw1
+Entry address(es):
+  IP address: 198.51.100.1
+Platform: cisco C9500-48Y4C,  Capabilities: Router Switch IGMP
+Interface: TenGigabitEthernet1/1/1,  Port ID (outgoing port): TwentyFiveGigE1/0/11
+Holdtime : 133 sec
+
+Version :
+Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a, RELEASE SOFTWARE (fc3)
+
+advertisement version: 2
+VTP Management Domain: ''
+Native VLAN: 1
+Duplex: full
+Management address(es):
+  IP address: 198.51.100.1
+
+-------------------------
+Device ID: SEP00005E005341
+Entry address(es):
+  IP address: 203.0.113.41
+Platform: Cisco IP Phone 8851,  Capabilities: Host Phone Two-port Mac Relay
+Interface: GigabitEthernet1/0/4,  Port ID (outgoing port): Port 1
+Holdtime : 151 sec
+Second Port Status: Down
+
+Version :
+sip88xx.14-1-1-0001-100
+
+advertisement version: 2
+Duplex: full
+Power drawn: 6.300 Watts
+Management address(es):
+
+
+Total cdp entries displayed : 2
+access-sw1#

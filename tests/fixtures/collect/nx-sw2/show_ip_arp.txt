@@ -1,0 +1,16 @@
+nx-sw2# show ip arp
+
+Flags: * - Adjacencies learnt on non-active FHRP router
+       + - Adjacencies synced via CFSoE
+       # - Adjacencies Throttled for Glean
+       CP - Added via L2RIB, Control plane Adjacencies
+       PS - Added via L2RIB, Peer Sync
+       RO - Re-Originated Peer Sync Entry
+       D - Static Adjacencies attached to down interface
+
+IP ARP Table for context default
+Total number of entries: 3
+Address         Age       MAC Address     Interface       Flags
+192.0.2.51      00:03:12  0000.5e00.5351  Vlan40
+192.0.2.52      00:01:44  INCOMPLETE      Vlan40
+192.0.2.1       00:00:10  0000.5e00.53f1  Vlan40          +

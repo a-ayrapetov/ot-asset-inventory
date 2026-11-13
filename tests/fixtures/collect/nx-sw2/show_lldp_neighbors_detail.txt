@@ -1,0 +1,46 @@
+nx-sw2# show lldp neighbors detail
+Capability codes:
+  (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+  (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Device ID            Local Intf      Hold-time  Capability  Port ID
+
+Chassis id: 0000.5e00.5351
+Port id: 0000.5e00.5351
+Local Port id: Eth1/1
+Port Description: null
+System Name: cam-yard-1
+System Description: IP camera
+Time remaining: 98 seconds
+System Capabilities: S
+Enabled Capabilities: S
+Management Address: 192.0.2.51
+Management Address IPV6: not advertised
+Vlan ID: 40
+
+Chassis id: 0000.5e00.5354
+Port id: port 2
+Local Port id: Eth1/4
+Port Description: ring port 2
+System Name: cell9-sw
+System Description: Industrial ring switch
+Time remaining: 112 seconds
+System Capabilities: B
+Enabled Capabilities: B
+Management Address: 192.0.2.54
+Management Address IPV6: not advertised
+Vlan ID: 40
+
+Chassis id: 0000.5e00.53f1
+Port id: TwentyFiveGigE1/0/12
+Local Port id: Eth1/49
+Port Description: TwentyFiveGigE1/0/12
+System Name: core-sw1
+System Description: Cisco IOS Software [Cupertino], Catalyst L3 Switch Software
+Time remaining: 101 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 198.51.100.1
+Management Address IPV6: not advertised
+Vlan ID: 1
+
+Total entries displayed: 3

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ot-asset-inventory"
+version = "0.1.0"
+description = "Passive OT asset inventory from switch ARP, MAC address table, interfaces status and CDP / LLDP output"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Arkadiy Ayrapetov" }]
+dependencies = []
+keywords = ["ot", "ics", "asset-inventory", "passive", "cisco", "ios-xe", "nx-os", "lldp", "cdp"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Intended Audience :: System Administrators",
+  "Topic :: System :: Networking :: Monitoring",
+  "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/a-ayrapetov/ot-asset-inventory"
+Issues = "https://github.com/a-ayrapetov/ot-asset-inventory/issues"
+
+[project.scripts]
+ot-inventory = "ot_inventory:main"
+
+[tool.setuptools]
+py-modules = ["ot_inventory"]
